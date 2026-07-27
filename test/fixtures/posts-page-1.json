@@ -1,0 +1,41 @@
+{
+  "posts": [
+    {
+      "id": "p1",
+      "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "title": "Vision Pro, one year later",
+      "slug": "vision-pro-one-year",
+      "status": "published",
+      "url": "https://birchtree.me/blog/vision-pro-one-year/",
+      "plaintext": "still the most interesting hardware Apple ships",
+      "published_at": "2025-02-11T12:00:00.000Z",
+      "updated_at": "2025-02-11T12:00:00.000Z",
+      "tags": [
+        { "name": "Apple", "slug": "apple" },
+        { "name": "VR", "slug": "vr" }
+      ]
+    },
+    {
+      "id": "p2",
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "title": "Untitled draft",
+      "slug": "untitled-draft",
+      "status": "draft",
+      "url": null,
+      "plaintext": "half a thought",
+      "published_at": null,
+      "updated_at": "2026-07-01T09:00:00.000Z",
+      "tags": []
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "page": 1,
+      "limit": 100,
+      "pages": 3,
+      "total": 250,
+      "next": 2,
+      "prev": null
+    }
+  }
+}
