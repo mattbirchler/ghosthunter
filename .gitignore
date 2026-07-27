@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+
+# Local index and credentials must never be committed
+*.db
+*.db-shm
+*.db-wal
+.env
+config.json
+
+.DS_Store
