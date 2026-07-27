@@ -1,9 +1,7 @@
 import readline from 'node:readline';
 import { linkFor } from './types.ts';
+import { layout } from './layout.ts';
 import type { GhostDoc, PickerAction, SearchHit } from './types.ts';
-
-/** Rows of results shown at once. */
-const VISIBLE_ROWS = 10;
 
 export interface PickerState {
   query: string;
@@ -113,55 +111,31 @@ export function handleKey(state: PickerState, key: Key): PickerResult {
   return stay();
 }
 
-function formatDate(doc: GhostDoc): string {
-  const raw = doc.publishedAt ?? doc.updatedAt;
-  return raw.slice(0, 10);
-}
-
-function render(state: PickerState, stale: string | null): string {
-  const lines: string[] = [];
-  const count = state.hits.length;
-  lines.push(`\x1b[1m> ${state.query}\x1b[0m  \x1b[2m(${count} ${count === 1 ? 'hit' : 'hits'})\x1b[0m`);
-
-  const maxIndex = state.hits.length - 1;
-  const selected = clamp(state.selected, maxIndex);
-
-  // Scroll the window so the selection stays visible.
-  const start = Math.max(0, Math.min(selected - Math.floor(VISIBLE_ROWS / 2), count - VISIBLE_ROWS));
-  const window = state.hits.slice(Math.max(0, start), Math.max(0, start) + VISIBLE_ROWS);
-
-  window.forEach((h, i) => {
-    const index = Math.max(0, start) + i;
-    const marker = index === selected ? '\x1b[36m❯\x1b[0m' : ' ';
-    const isDraft = h.doc.status !== 'published' && h.doc.status !== 'sent';
-    const tag = isDraft ? ` \x1b[33m[${h.doc.status}]\x1b[0m` : '';
-    const title = index === selected ? `\x1b[1m${h.doc.title}\x1b[0m` : h.doc.title;
-    lines.push(`${marker} ${title}${tag}  \x1b[2m${formatDate(h.doc)}\x1b[0m`);
-  });
-
-  if (count === 0) {
-    lines.push('\x1b[2m  No matches.\x1b[0m');
-  } else {
-    const snip = state.hits[selected]?.snippet.replaceAll(/\s+/g, ' ').trim() ?? '';
-    if (snip !== '') lines.push(`\x1b[2m  ${snip.slice(0, 200)}\x1b[0m`);
-  }
-
-  if (stale !== null) lines.push(`\x1b[33m  ${stale}\x1b[0m`);
-  lines.push('\x1b[2m  enter copy URL   opt-enter or ^L markdown link   ^O open   ^E edit   esc quit\x1b[0m');
-
-  return lines.join('\n');
-}
-
 export interface RunPickerOptions {
   initialQuery: string;
   run: (query: string) => SearchHit[];
-  /** Shown as a warning line, for example when the index could not refresh. */
+  /** The site the index was built from, shown in the header. */
+  site: string;
+  /** Shown in the footer, for example when the index could not refresh. */
   notice?: string | null;
 }
 
+/** Terminal control sequences for a full screen application. */
+const ALT_SCREEN_ON = '\x1b[?1049h';
+const ALT_SCREEN_OFF = '\x1b[?1049l';
+const CURSOR_HIDE = '\x1b[?25l';
+const CURSOR_SHOW = '\x1b[?25h';
+const HOME = '\x1b[H';
+const CLEAR_BELOW = '\x1b[0J';
+
+const FALLBACK_SIZE = { width: 80, height: 24 };
+
 /**
- * Draw the picker and drive it until the user picks something or quits.
- * Rendering goes to stderr so stdout stays clean for piping.
+ * Draw the full screen picker and drive it until the user picks or quits.
+ *
+ * Uses the alternate screen buffer, so the terminal is left exactly as it was
+ * found: no scrollback is consumed and the previous contents come back on exit.
+ * All layout is delegated to the pure `layout` function.
  */
 export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   const out = process.stderr;
@@ -171,12 +145,14 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     selected: 0,
   };
 
-  let lastHeight = 0;
+  const size = (): { width: number; height: number } => ({
+    width: process.stdout.columns ?? FALLBACK_SIZE.width,
+    height: process.stdout.rows ?? FALLBACK_SIZE.height,
+  });
+
   const draw = (): void => {
-    if (lastHeight > 0) out.write(`\x1b[${lastHeight}A\x1b[0J`);
-    const frame = render(state, opts.notice ?? null);
-    out.write(`${frame}\n`);
-    lastHeight = frame.split('\n').length;
+    const frame = layout(state, size(), { site: opts.site, notice: opts.notice ?? null });
+    out.write(`${HOME}${frame.join('\n')}${CLEAR_BELOW}`);
   };
 
   readline.emitKeypressEvents(process.stdin);
@@ -184,6 +160,9 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.resume();
 
+  out.write(`${ALT_SCREEN_ON}${CURSOR_HIDE}`);
+  const onResize = (): void => draw();
+  process.stdout.on('resize', onResize);
   draw();
 
   try {
@@ -209,8 +188,9 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     });
   } finally {
     // Always restore the terminal, even if something above threw.
+    process.stdout.off('resize', onResize);
+    out.write(`${CURSOR_SHOW}${ALT_SCREEN_OFF}`);
     if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);
     process.stdin.pause();
-    if (lastHeight > 0) out.write(`\x1b[${lastHeight}A\x1b[0J`);
   }
 }

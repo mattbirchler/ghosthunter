@@ -371,6 +371,7 @@ async function runSearch(cmd: Extract<Command, { kind: 'search' }>): Promise<num
     const action = await runPicker({
       initialQuery: cmd.query,
       notice,
+      site: config.siteUrl.replace(/^https?:\/\//, ''),
       run: (q) => search(store, q, { limit: cmd.limit, prefixLastTerm: true }),
     });
 
