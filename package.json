@@ -1,0 +1,33 @@
+{
+  "name": "@mattbirchler/ghosthunter",
+  "version": "0.1.0",
+  "description": "Search your own Ghost blog from the terminal and get the link",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "bin": {
+    "ghosthunter": "bin/ghosthunter.ts",
+    "ght": "bin/ghosthunter.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ghost",
+    "cli",
+    "search",
+    "blog"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattbirchler/ghosthunter.git"
+  },
+  "license": "MIT"
+}
