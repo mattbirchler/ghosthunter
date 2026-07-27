@@ -31,8 +31,7 @@ $ ght vision pro
 
 ## Status
 
-Design approved, implementation not started. See
-[the design spec](docs/superpowers/specs/2026-07-27-ghosthunter-design.md).
+In development.
 
 ## License
 

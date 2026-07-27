@@ -2,6 +2,9 @@ node_modules/
 dist/
 *.log
 
+# Planning docs stay local
+docs/superpowers/
+
 # Local index and credentials must never be committed
 *.db
 *.db-shm
