@@ -82,8 +82,7 @@ export function parseArgs(argv: string[]): Command {
     return { kind: 'status' };
   }
 
-  if (words.length === 0) return { kind: 'help' };
-
+  // No words is not an error: it opens the browser with an empty query.
   return { kind: 'search', query: words.join(' '), json, list, offline, limit };
 }
 
@@ -135,10 +134,14 @@ const HELP = `GhostHunter ${VERSION}
 Search your own Ghost blog and get the link.
 
 USAGE
-  ghosthunter <query>            Search and pick a result (alias: ght)
+  ghosthunter                    Open the browser (alias: ght)
+  ghosthunter <query>            Open the browser on a search
   ghosthunter init               Set up the site URL and API key
   ghosthunter sync               Fetch what changed since the last sync
   ghosthunter status             Show index size and last sync time
+
+The browser syncs in the background on open, so it starts instantly and
+refreshes itself once new posts arrive.
 
 OPTIONS
   --list          Print results instead of opening the picker
@@ -161,8 +164,9 @@ QUERY SYNTAX
   status:draft             Only drafts (also: published, scheduled, sent)
   type:page                Only pages (also: post)
 
-PICKER KEYS
+BROWSER KEYS
   up, down        Move the selection
+  shift-up/down   Scroll the article text (also page up and page down)
   enter           Copy the URL and exit
   opt-enter, ^L   Copy a markdown link and exit
   ^O              Open the post in your browser
@@ -186,6 +190,13 @@ function warnIfBodiesEmpty(store: Store): void {
       'Titles and tags are still searchable, but searching post contents will not work.\n' +
       'This usually means the Ghost version does not return the plaintext format.\n',
   );
+}
+
+function offlineNotice(store: Store): string {
+  const last = lastSyncAt(store);
+  return last === null
+    ? 'Offline. The index has not been built yet.'
+    : `Offline. Index last updated ${ageOf(last)}.`;
 }
 
 function notConfigured(): number {
@@ -343,36 +354,47 @@ async function runSearch(cmd: Extract<Command, { kind: 'search' }>): Promise<num
   try {
     if (store.count() === 0 && key === null) return notConfigured();
 
-    let notice: string | null = null;
-
-    // Search must never fail because of the network, so a sync error only
-    // downgrades to a notice.
-    if (!cmd.offline && key !== null) {
-      try {
-        await sync(new GhostClient(config.siteUrl, key), store);
-      } catch {
-        const last = lastSyncAt(store);
-        notice =
-          last === null
-            ? 'Offline. The index has not been built yet.'
-            : `Offline. Index last updated ${ageOf(last)}.`;
-      }
-    }
-
     const interactive = process.stdout.isTTY === true && !cmd.json && !cmd.list;
+    const canSync = !cmd.offline && key !== null;
 
+    // Non-interactive output has to wait for the sync, because there is no way
+    // to update a printed list after the fact.
     if (!interactive) {
+      let notice: string | null = null;
+      if (canSync) {
+        try {
+          await sync(new GhostClient(config.siteUrl, key), store);
+        } catch {
+          notice = offlineNotice(store);
+        }
+      }
       const hits = search(store, cmd.query, { limit: cmd.limit });
       if (notice !== null) process.stderr.write(`${notice}\n`);
       process.stdout.write(`${cmd.json ? formatJson(hits) : formatList(hits)}\n`);
       return EXIT_OK;
     }
 
+    // Interactive: open immediately against whatever is already indexed, then
+    // sync behind the scenes. Waiting on the network before showing anything
+    // would make every launch feel slow for no benefit.
     const action = await runPicker({
       initialQuery: cmd.query,
-      notice,
       site: config.siteUrl.replace(/^https?:\/\//, ''),
       run: (q) => search(store, q, { limit: cmd.limit, prefixLastTerm: true }),
+      onReady: (control) => {
+        if (!canSync) {
+          if (key === null) control.setNotice('Read only: no API key, searching the local index.');
+          return;
+        }
+        void sync(new GhostClient(config.siteUrl, key), store)
+          .then((r) => {
+            const changed = r.added + r.updated + r.removed;
+            control.refresh(changed > 0 ? `Synced ${changed} updated documents.` : undefined);
+          })
+          .catch(() => {
+            control.setNotice(offlineNotice(store));
+          });
+      },
     });
 
     if (action.kind === 'cancel') return EXIT_OK;

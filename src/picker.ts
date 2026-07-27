@@ -3,10 +3,15 @@ import { linkFor } from './types.ts';
 import { layout } from './layout.ts';
 import type { GhostDoc, PickerAction, SearchHit } from './types.ts';
 
+/** Lines the article pane moves per scroll keypress. */
+const PREVIEW_SCROLL_LINES = 5;
+
 export interface PickerState {
   query: string;
   hits: SearchHit[];
   selected: number;
+  /** Lines the article pane is scrolled down by. */
+  previewOffset: number;
 }
 
 export interface Key {
@@ -55,16 +60,27 @@ export function handleKey(state: PickerState, key: Key): PickerResult {
   });
 
   const name = key.name ?? '';
+  const offset = state.previewOffset ?? 0;
 
   if (name === 'escape' || (key.ctrl && name === 'c')) {
     return emit({ kind: 'cancel' });
   }
 
+  // Shift with the arrows scrolls the article pane. Page keys do the same, for
+  // keyboards where shift-arrow is intercepted.
+  if ((key.shift && name === 'down') || name === 'pagedown') {
+    return stay({ previewOffset: offset + PREVIEW_SCROLL_LINES });
+  }
+  if ((key.shift && name === 'up') || name === 'pageup') {
+    return stay({ previewOffset: Math.max(0, offset - PREVIEW_SCROLL_LINES) });
+  }
+
+  // Changing the selection always resets the article back to the top.
   if (name === 'down' || (key.ctrl && name === 'n')) {
-    return stay({ selected: clamp(selected + 1, maxIndex) });
+    return stay({ selected: clamp(selected + 1, maxIndex), previewOffset: 0 });
   }
   if (name === 'up' || (key.ctrl && name === 'p')) {
-    return stay({ selected: clamp(selected - 1, maxIndex) });
+    return stay({ selected: clamp(selected - 1, maxIndex), previewOffset: 0 });
   }
 
   if (name === 'return' || name === 'enter') {
@@ -88,13 +104,13 @@ export function handleKey(state: PickerState, key: Key): PickerResult {
   }
 
   if (key.ctrl && name === 'u') {
-    return { state: { ...state, query: '', selected: 0 }, requery: true };
+    return { state: { ...state, query: '', selected: 0, previewOffset: 0 }, requery: true };
   }
 
   if (name === 'backspace') {
     if (state.query === '') return stay();
     return {
-      state: { ...state, query: state.query.slice(0, -1), selected: 0 },
+      state: { ...state, query: state.query.slice(0, -1), selected: 0, previewOffset: 0 },
       requery: true,
     };
   }
@@ -103,12 +119,20 @@ export function handleKey(state: PickerState, key: Key): PickerResult {
   const seq = key.sequence ?? '';
   if (!key.ctrl && !key.meta && seq.length === 1 && seq.codePointAt(0)! >= 32) {
     return {
-      state: { ...state, query: state.query + seq, selected: 0 },
+      state: { ...state, query: state.query + seq, selected: 0, previewOffset: 0 },
       requery: true,
     };
   }
 
   return stay();
+}
+
+/** Handle given to the caller so background work can update a live picker. */
+export interface PickerControl {
+  /** Re-run the current query and redraw, optionally flashing a message. */
+  refresh: (flash?: string) => void;
+  /** Replace the footer message without re-running the query. */
+  setNotice: (notice: string | null) => void;
 }
 
 export interface RunPickerOptions {
@@ -118,7 +142,12 @@ export interface RunPickerOptions {
   site: string;
   /** Shown in the footer, for example when the index could not refresh. */
   notice?: string | null;
+  /** Called once the picker is on screen, for kicking off background work. */
+  onReady?: (control: PickerControl) => void;
 }
+
+/** How long a flash message stays in the footer. */
+const FLASH_MS = 4000;
 
 /** Terminal control sequences for a full screen application. */
 const ALT_SCREEN_ON = '\x1b[?1049h';
@@ -143,7 +172,13 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     query: opts.initialQuery,
     hits: opts.run(opts.initialQuery),
     selected: 0,
+    previewOffset: 0,
   };
+
+  let notice: string | null = opts.notice ?? null;
+  let flash: string | null = null;
+  let flashTimer: NodeJS.Timeout | null = null;
+  let finished = false;
 
   const size = (): { width: number; height: number } => ({
     width: process.stdout.columns ?? FALLBACK_SIZE.width,
@@ -151,8 +186,33 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   });
 
   const draw = (): void => {
-    const frame = layout(state, size(), { site: opts.site, notice: opts.notice ?? null });
+    if (finished) return;
+    const frame = layout(state, size(), { site: opts.site, notice, flash });
     out.write(`${HOME}${frame.join('\n')}${CLEAR_BELOW}`);
+  };
+
+  const control: PickerControl = {
+    refresh: (message?: string) => {
+      if (finished) return;
+      // Keep the caret where it is: re-run the query the user currently has.
+      const hits = opts.run(state.query);
+      const selected = Math.min(state.selected, Math.max(0, hits.length - 1));
+      state = { ...state, hits, selected };
+      if (message !== undefined) {
+        flash = message;
+        if (flashTimer !== null) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+          flash = null;
+          draw();
+        }, FLASH_MS);
+        flashTimer.unref?.();
+      }
+      draw();
+    },
+    setNotice: (next: string | null) => {
+      notice = next;
+      draw();
+    },
   };
 
   readline.emitKeypressEvents(process.stdin);
@@ -164,6 +224,7 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   const onResize = (): void => draw();
   process.stdout.on('resize', onResize);
   draw();
+  opts.onReady?.(control);
 
   try {
     return await new Promise<PickerAction>((resolve) => {
@@ -188,6 +249,8 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     });
   } finally {
     // Always restore the terminal, even if something above threw.
+    finished = true;
+    if (flashTimer !== null) clearTimeout(flashTimer);
     process.stdout.off('resize', onResize);
     out.write(`${CURSOR_SHOW}${ALT_SCREEN_OFF}`);
     if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);

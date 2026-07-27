@@ -56,8 +56,13 @@ test('an invalid --limit falls back to the default', () => {
   assert.equal(c.kind === 'search' && c.limit, 50);
 });
 
-test('no arguments shows help', () => {
-  assert.equal(parseArgs([]).kind, 'help');
+test('no arguments opens the browser with an empty query', () => {
+  const c = parseArgs([]);
+  assert.equal(c.kind, 'search');
+  assert.equal(c.kind === 'search' && c.query, '');
+});
+
+test('--help still shows help', () => {
   assert.equal(parseArgs(['--help']).kind, 'help');
   assert.equal(parseArgs(['-h']).kind, 'help');
 });
@@ -77,8 +82,11 @@ test('a query using a filter is not mistaken for a subcommand', () => {
   assert.equal(c.kind, 'search');
 });
 
-test('flags only, with no query, shows help', () => {
-  assert.equal(parseArgs(['--json']).kind, 'help');
+test('flags only, with no query, lists recent documents', () => {
+  const c = parseArgs(['--json']);
+  assert.equal(c.kind, 'search');
+  assert.equal(c.kind === 'search' && c.query, '');
+  assert.equal(c.kind === 'search' && c.json, true);
 });
 
 test('formatList output is stable and has no em dashes', () => {

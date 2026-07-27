@@ -7,21 +7,28 @@ is built for the person who writes the posts, and answers one question fast:
 
 > When did I write about this, and what's the URL?
 
+Run `ght` and you're in. Type to search, arrow through results, read the article
+alongside the list, and press enter to put the link on your clipboard.
+
 ```
-$ ght vision pro
-┌──────────────────────────────────────────────┐
-│ > vision pro                          14 hits│
-├──────────────────────────────────────────────┤
-│ ❯ Vision Pro, one year later      2025-02-11 │
-│   The Vision Pro is not a failure 2024-06-03 │
-│   My first week with Vision Pro   2024-02-09 │
-├──────────────────────────────────────────────┤
-│ ...still think the [Vision] [Pro] is the most │
-│ interesting thing Apple has shipped in a     │
-│ decade, even if I barely use mine...         │
-└──────────────────────────────────────────────┘
-  enter copy URL   opt-enter markdown link   ^O open
+ GhostHunter                                          birchtree.ghost.io
+ ❯ vision pro▌                                                   6 hits
+────────────────────────────────────────────┬──────────────────────────
+ ❯ Vision Pro, one year later    2025-02-11 │ Vision Pro, one year later
+   The Vision Pro is not a fail… 2024-06-03 │ 2025-02-11 · post · apple
+   My first week with Vision Pro 2024-02-09 │ https://birchtree.me/blog/…
+   Thoughts on spatial computing 2024-01-15 │
+   Untitled thoughts on headse…* 2026-07-01 │ I still think the Vision Pro
+   Apple headset problem         2023-11-20 │ is the most interesting
+                                            │ thing Apple has shipped in
+                                            │ a decade, even if I barely
+                                            │ use mine these days...
+ ↵ copy   ⌥↵ markdown   ^O open   ^E edit   ⇧↑↓ scroll   esc quit
 ```
+
+Matching words are highlighted in the article text, and the index syncs in the
+background as soon as the browser opens, so it starts instantly and refreshes
+itself when new posts land.
 
 ## Why this exists
 
@@ -72,14 +79,17 @@ sync after that is incremental and takes about a fifth of a second.
 ## Usage
 
 ```sh
-ght vision pro                 # search and pick a result
-ght vision pro --list          # print results, no picker
+ght                            # open the browser
+ght vision pro                 # open the browser on a search
+ght vision pro --list          # print results, no browser
 ght vision pro --json          # JSON, for scripts
 ght sync                       # fetch what changed
 ght sync --full                # rebuild from scratch
 ght sync --prune               # also drop posts deleted in Ghost
 ght status                     # index size and last sync time
 ```
+
+You rarely need `sync` by hand. The browser does it for you on open.
 
 Piping works as you would expect. When output is not a terminal, GhostHunter
 prints a list instead of trying to draw a picker:
@@ -109,11 +119,12 @@ words, so `read` finds `reading`.
 Nothing you type can break the query. Stray quotes, asterisks, and parentheses
 are all treated as ordinary text.
 
-### Picker keys
+### Browser keys
 
 | Key | Action |
 |---|---|
 | `up` / `down` | Move the selection |
+| `shift-up` / `shift-down` | Scroll the article text (or page up and page down) |
 | `enter` | Copy the URL and exit |
 | `opt-enter` or `^L` | Copy a markdown link and exit |
 | `^O` | Open the post in your browser |
@@ -121,7 +132,8 @@ are all treated as ordinary text.
 | `^U` | Clear the query |
 | `esc` | Quit without copying |
 
-Results update as you type, so you can start broad and narrow down.
+Results update as you type, so you can start broad and narrow down. On a narrow
+terminal the article pane drops away and the list takes the full width.
 
 `opt-enter` is swallowed by some terminal setups depending on how "Use Option as
 Meta" is configured. `^L` does the same thing and always works.

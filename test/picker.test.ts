@@ -28,6 +28,7 @@ function state(over: Partial<PickerState> = {}): PickerState {
     query: 'vision',
     hits: [hit(doc()), hit(doc({ id: 'b', title: 'Second' }))],
     selected: 0,
+    previewOffset: 0,
     ...over,
   };
 }
@@ -150,6 +151,38 @@ test('every action key is safe with no hits', () => {
   ]) {
     assert.doesNotThrow(() => handleKey(empty, k));
   }
+});
+
+test('shift with the arrows scrolls the article pane', () => {
+  const down = handleKey(state(), key({ name: 'down', shift: true }));
+  assert.ok(down.state.previewOffset > 0);
+  assert.equal(down.state.selected, 0, 'scrolling must not move the selection');
+
+  const back = handleKey(down.state, key({ name: 'up', shift: true }));
+  assert.equal(back.state.previewOffset, 0);
+});
+
+test('the article pane cannot scroll above the top', () => {
+  const r = handleKey(state({ previewOffset: 0 }), key({ name: 'up', shift: true }));
+  assert.equal(r.state.previewOffset, 0);
+});
+
+test('page keys scroll the article pane too', () => {
+  const down = handleKey(state(), key({ name: 'pagedown' }));
+  assert.ok(down.state.previewOffset > 0);
+  assert.equal(handleKey(down.state, key({ name: 'pageup' })).state.previewOffset, 0);
+});
+
+test('changing the selection resets the article scroll', () => {
+  const scrolled = state({ previewOffset: 40 });
+  assert.equal(handleKey(scrolled, key({ name: 'down' })).state.previewOffset, 0);
+  assert.equal(handleKey(scrolled, key({ name: 'up' })).state.previewOffset, 0);
+});
+
+test('typing resets the article scroll', () => {
+  const scrolled = state({ previewOffset: 40 });
+  assert.equal(handleKey(scrolled, key({ name: 'x', sequence: 'x' })).state.previewOffset, 0);
+  assert.equal(handleKey(scrolled, key({ name: 'backspace' })).state.previewOffset, 0);
 });
 
 test('the selection is clamped when the hit list shrinks', () => {

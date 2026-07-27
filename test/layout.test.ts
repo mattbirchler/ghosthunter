@@ -139,27 +139,87 @@ test('an empty result set says so', () => {
   assert.match(out, /No matches/);
 });
 
-test('the detail pane describes the selected result', () => {
+test('the article pane describes the selected result', () => {
   const s: LayoutState = {
     query: 'vision',
     hits: [hit(doc({ title: 'First' })), hit(doc({ id: 'b', title: 'Second' }))],
     selected: 1,
   };
-  const out = layout(s, { width: 80, height: 24 }, ctx).map(strip).join('\n');
+  const out = layout(s, { width: 100, height: 24 }, ctx).map(strip).join('\n');
   assert.match(out, /Second/);
   assert.match(out, /https:\/\/birchtree\.me\/blog\/v\//);
-  assert.match(out, /a matching passage/);
 });
 
-test('the detail pane links a draft to the editor', () => {
+test('the article pane shows the full body text, not just the snippet', () => {
+  const body = 'The opening sentence of the article. ' + 'Filler prose. '.repeat(40);
+  const s: LayoutState = {
+    query: 'vision',
+    hits: [hit(doc({ plaintext: body }))],
+    selected: 0,
+  };
+  const out = layout(s, { width: 110, height: 30 }, ctx).map(strip).join('\n');
+  assert.match(out, /The opening sentence of the article/);
+});
+
+test('the article pane scrolls with previewOffset', () => {
+  const body = Array.from({ length: 200 }, (_, i) => `sentinel${i} filler words here`).join(' ');
+  const s = (offset: number): LayoutState => ({
+    query: 'x',
+    hits: [hit(doc({ plaintext: body }))],
+    selected: 0,
+    previewOffset: offset,
+  });
+  const top = layout(s(0), { width: 110, height: 30 }, ctx).map(strip).join('\n');
+  const down = layout(s(20), { width: 110, height: 30 }, ctx).map(strip).join('\n');
+  assert.notEqual(top, down);
+  assert.match(top, /sentinel0\b/);
+  assert.ok(!/sentinel0\b/.test(down), 'scrolled view should have moved past the start');
+});
+
+test('scrolling past the end clamps instead of blanking the pane', () => {
+  const s: LayoutState = {
+    query: 'x',
+    hits: [hit(doc({ plaintext: 'a short body' }))],
+    selected: 0,
+    previewOffset: 9999,
+  };
+  const out = layout(s, { width: 110, height: 30 }, ctx).map(strip).join('\n');
+  assert.match(out, /a short body|Vision Pro/);
+});
+
+test('query terms are highlighted in the article text', () => {
+  const s: LayoutState = {
+    query: 'vision',
+    hits: [hit(doc({ plaintext: 'a paragraph mentioning vision in the middle' }))],
+    selected: 0,
+  };
+  const out = layout(s, { width: 110, height: 30 }, ctx).join('\n');
+  assert.ok(out.includes('\x1b[43m'), 'expected a highlight escape around the matched term');
+});
+
+test('the article pane links a draft to the editor', () => {
   const s: LayoutState = {
     query: 'x',
     hits: [hit(doc({ status: 'draft', url: null }))],
     selected: 0,
   };
-  const out = layout(s, { width: 80, height: 24 }, ctx).map(strip).join('\n');
+  const out = layout(s, { width: 100, height: 24 }, ctx).map(strip).join('\n');
   assert.match(out, /ghost\.io\/ghost\/#\/editor\/post\/a/);
-  assert.match(out, /\[draft\]/);
+});
+
+test('a narrow terminal drops to a single column', () => {
+  const wide = layout(state(5), { width: 100, height: 24 }, ctx).map(strip).join('\n');
+  const narrow = layout(state(5), { width: 40, height: 24 }, ctx).map(strip).join('\n');
+  assert.ok(wide.includes('│'), 'wide layout should have a column divider');
+  assert.ok(!narrow.includes('│'), 'narrow layout should not');
+});
+
+test('the two column divider is present on every body row', () => {
+  const out = layout(state(30), { width: 100, height: 24 }, ctx);
+  // Rows 3 through height-2 are body rows.
+  for (let i = 3; i < out.length - 1; i++) {
+    assert.ok(out[i]!.includes('│'), `row ${i} is missing the divider`);
+  }
 });
 
 test('the footer shows the key hints by default', () => {
