@@ -284,7 +284,7 @@ export function layout(state: LayoutState, size: Size, ctx: LayoutContext): stri
     ? `${C.green} ${ctx.flash}${C.reset}`
     : ctx.notice
       ? `${C.yellow} ${ctx.notice}${C.reset}`
-      : ` ${C.dim}↵ copy   ⌥↵ markdown   ^O open   ^E edit   ⇧↑↓ scroll   esc quit${C.reset}`;
+      : ` ${C.dim}↵ copy   ⌥↵ markdown   ^O open   ^E edit   ⇧↑↓ scroll   ^C quit${C.reset}`;
   lines.push(truncate(keys, w));
 
   return lines.slice(0, h);

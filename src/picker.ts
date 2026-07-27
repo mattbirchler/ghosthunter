@@ -144,6 +144,12 @@ export interface RunPickerOptions {
   notice?: string | null;
   /** Called once the picker is on screen, for kicking off background work. */
   onReady?: (control: PickerControl) => void;
+  /**
+   * Perform a chosen action. The picker stays open afterwards, so several
+   * links can be copied in one session. Return a message to flash in the
+   * footer as confirmation.
+   */
+  onAction?: (action: PickerAction) => string | null | void;
 }
 
 /** How long a flash message stays in the footer. */
@@ -161,13 +167,15 @@ const ERASE_LINE = '\x1b[K';
 const FALLBACK_SIZE = { width: 80, height: 24 };
 
 /**
- * Draw the full screen picker and drive it until the user picks or quits.
+ * Draw the full screen picker and run until the user quits with ^C or escape.
+ * Actions are performed through `onAction` without closing, so several links
+ * can be copied in one session.
  *
  * Uses the alternate screen buffer, so the terminal is left exactly as it was
  * found: no scrollback is consumed and the previous contents come back on exit.
  * All layout is delegated to the pure `layout` function.
  */
-export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
+export async function runPicker(opts: RunPickerOptions): Promise<void> {
   const out = process.stderr;
   let state: PickerState = {
     query: opts.initialQuery,
@@ -199,6 +207,16 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     out.write(`${HOME}${body}${CLEAR_BELOW}`);
   };
 
+  const setFlash = (message: string): void => {
+    flash = message;
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      flash = null;
+      draw();
+    }, FLASH_MS);
+    flashTimer.unref?.();
+  };
+
   const control: PickerControl = {
     refresh: (message?: string) => {
       if (finished) return;
@@ -206,15 +224,7 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
       const hits = opts.run(state.query);
       const selected = Math.min(state.selected, Math.max(0, hits.length - 1));
       state = { ...state, hits, selected };
-      if (message !== undefined) {
-        flash = message;
-        if (flashTimer !== null) clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => {
-          flash = null;
-          draw();
-        }, FLASH_MS);
-        flashTimer.unref?.();
-      }
+      if (message !== undefined) setFlash(message);
       draw();
     },
     setNotice: (next: string | null) => {
@@ -232,10 +242,36 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   const onResize = (): void => draw();
   process.stdout.on('resize', onResize);
   draw();
+
+  /**
+   * Put the terminal back. Idempotent, because it runs both on the normal exit
+   * path and from a signal handler. A TUI that dies without doing this leaves
+   * the user staring at an alternate screen with no cursor.
+   */
+  const restore = (): void => {
+    if (finished) return;
+    finished = true;
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    process.stdout.off('resize', onResize);
+    out.write(`${CURSOR_SHOW}${ALT_SCREEN_OFF}`);
+    if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);
+    process.stdin.pause();
+  };
+
+  // Raw mode normally delivers ^C as a keypress rather than a signal, but if a
+  // signal does arrive the terminal still has to be handed back.
+  const onSignal = (): void => {
+    restore();
+    process.exit(130);
+  };
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+  process.once('SIGHUP', onSignal);
+
   opts.onReady?.(control);
 
   try {
-    return await new Promise<PickerAction>((resolve) => {
+    await new Promise<void>((resolve) => {
       const onKeypress = (_str: string, key: Key | undefined): void => {
         if (key === undefined) return;
 
@@ -247,9 +283,15 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
         }
 
         if (result.action !== undefined) {
-          process.stdin.off('keypress', onKeypress);
-          resolve(result.action);
-          return;
+          // Quitting is the only action that ends the session. Everything else
+          // is performed in place so more than one link can be copied.
+          if (result.action.kind === 'cancel') {
+            process.stdin.off('keypress', onKeypress);
+            resolve();
+            return;
+          }
+          const message = opts.onAction?.(result.action);
+          if (typeof message === 'string' && message !== '') setFlash(message);
         }
         draw();
       };
@@ -257,11 +299,9 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
     });
   } finally {
     // Always restore the terminal, even if something above threw.
-    finished = true;
-    if (flashTimer !== null) clearTimeout(flashTimer);
-    process.stdout.off('resize', onResize);
-    out.write(`${CURSOR_SHOW}${ALT_SCREEN_OFF}`);
-    if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);
-    process.stdin.pause();
+    process.off('SIGINT', onSignal);
+    process.off('SIGTERM', onSignal);
+    process.off('SIGHUP', onSignal);
+    restore();
   }
 }

@@ -167,12 +167,14 @@ QUERY SYNTAX
 BROWSER KEYS
   up, down        Move the selection
   shift-up/down   Scroll the article text (also page up and page down)
-  enter           Copy the URL and exit
-  opt-enter, ^L   Copy a markdown link and exit
+  enter           Copy the URL
+  opt-enter, ^L   Copy a markdown link
   ^O              Open the post in your browser
   ^E              Open the post in the Ghost editor
   ^U              Clear the query
-  esc             Quit without copying
+  ^C, esc         Quit
+
+Copying leaves the browser open, so you can grab several links in one go.
 `;
 
 /**
@@ -377,10 +379,30 @@ async function runSearch(cmd: Extract<Command, { kind: 'search' }>): Promise<num
     // Interactive: open immediately against whatever is already indexed, then
     // sync behind the scenes. Waiting on the network before showing anything
     // would make every launch feel slow for no benefit.
-    const action = await runPicker({
+    await runPicker({
       initialQuery: cmd.query,
       site: config.siteUrl.replace(/^https?:\/\//, ''),
       run: (q) => search(store, q, { limit: cmd.limit, prefixLastTerm: true }),
+      onAction: (action) => {
+        if (action.kind === 'copy-url') {
+          const link = linkFor(action.doc);
+          copyToClipboard(link);
+          return `Copied ${link}`;
+        }
+        if (action.kind === 'copy-markdown') {
+          copyToClipboard(markdownLink(action.doc));
+          return `Copied markdown link to "${action.doc.title}"`;
+        }
+        if (action.kind === 'open') {
+          openInBrowser(linkFor(action.doc));
+          return 'Opened in your browser.';
+        }
+        if (action.kind === 'edit') {
+          openInBrowser(action.doc.editorUrl);
+          return 'Opened in the Ghost editor.';
+        }
+        return null;
+      },
       onReady: (control) => {
         if (!canSync) {
           if (key === null) control.setNotice('Read only: no API key, searching the local index.');
@@ -397,21 +419,6 @@ async function runSearch(cmd: Extract<Command, { kind: 'search' }>): Promise<num
       },
     });
 
-    if (action.kind === 'cancel') return EXIT_OK;
-
-    if (action.kind === 'copy-url') {
-      const link = linkFor(action.doc);
-      copyToClipboard(link);
-      process.stderr.write(`Copied: ${link}\n`);
-    } else if (action.kind === 'copy-markdown') {
-      const md = markdownLink(action.doc);
-      copyToClipboard(md);
-      process.stderr.write(`Copied: ${md}\n`);
-    } else if (action.kind === 'open') {
-      openInBrowser(linkFor(action.doc));
-    } else {
-      openInBrowser(action.doc.editorUrl);
-    }
     return EXIT_OK;
   } finally {
     store.close();

@@ -23,7 +23,7 @@ alongside the list, and press enter to put the link on your clipboard.
                                             │ thing Apple has shipped in
                                             │ a decade, even if I barely
                                             │ use mine these days...
- ↵ copy   ⌥↵ markdown   ^O open   ^E edit   ⇧↑↓ scroll   esc quit
+ ↵ copy   ⌥↵ markdown   ^O open   ^E edit   ⇧↑↓ scroll   ^C quit
 ```
 
 Matching words are highlighted in the article text, and the index syncs in the
@@ -125,12 +125,15 @@ are all treated as ordinary text.
 |---|---|
 | `up` / `down` | Move the selection |
 | `shift-up` / `shift-down` | Scroll the article text (or page up and page down) |
-| `enter` | Copy the URL and exit |
-| `opt-enter` or `^L` | Copy a markdown link and exit |
+| `enter` | Copy the URL |
+| `opt-enter` or `^L` | Copy a markdown link |
 | `^O` | Open the post in your browser |
 | `^E` | Open the post in the Ghost editor |
 | `^U` | Clear the query |
-| `esc` | Quit without copying |
+| `^C` or `esc` | Quit |
+
+Copying does not close the browser. It confirms in the footer and stays put, so
+you can pull several links in one session. Quit with `^C` when you're done.
 
 Results update as you type, so you can start broad and narrow down. On a narrow
 terminal the article pane drops away and the list takes the full width.
