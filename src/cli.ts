@@ -170,6 +170,23 @@ PICKER KEYS
   esc             Quit without copying
 `;
 
+/**
+ * Ghost returning documents with no body text would make every body search come
+ * back empty for no visible reason. Say so plainly instead.
+ */
+function warnIfBodiesEmpty(store: Store): void {
+  const total = store.count();
+  if (total === 0) return;
+  const empty = store.emptyBodyCount();
+  if (empty < total * 0.9) return;
+
+  process.stderr.write(
+    `\nWarning: ${empty} of ${total} documents came back with no body text.\n` +
+      'Titles and tags are still searchable, but searching post contents will not work.\n' +
+      'This usually means the Ghost version does not return the plaintext format.\n',
+  );
+}
+
 function notConfigured(): number {
   process.stderr.write('GhostHunter is not set up yet. Run: ghosthunter init\n');
   return EXIT_NOT_CONFIGURED;
@@ -229,6 +246,7 @@ async function runInit(): Promise<number> {
         onProgress: (m) => process.stderr.write(`  ${m}\n`),
       });
       process.stderr.write(`\nReady. Indexed ${r.added} documents.\n`);
+      warnIfBodiesEmpty(store);
       process.stderr.write('Try: ghosthunter <something you have written about>\n');
     } finally {
       store.close();
@@ -255,6 +273,7 @@ async function runSync(cmd: { full: boolean; prune: boolean }): Promise<number> 
     process.stderr.write(
       `Added ${r.added}, updated ${r.updated}, removed ${r.removed}.\n`,
     );
+    if (cmd.full) warnIfBodiesEmpty(store);
     return EXIT_OK;
   } finally {
     store.close();

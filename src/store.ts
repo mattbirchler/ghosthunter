@@ -265,6 +265,18 @@ export class Store {
     return ids.length;
   }
 
+  /**
+   * How many documents have no body text. Used to catch the silent failure
+   * where Ghost returns documents but no plaintext, which would leave every
+   * body search returning nothing with no visible cause.
+   */
+  emptyBodyCount(): number {
+    const r = this.#db
+      .prepare("SELECT COUNT(*) AS n FROM documents WHERE plaintext = ''")
+      .get() as { n: number } | undefined;
+    return r?.n ?? 0;
+  }
+
   getMeta(key: string): string | null {
     const r = this.#db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
       | { value: string }

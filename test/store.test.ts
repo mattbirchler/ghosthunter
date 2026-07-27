@@ -144,6 +144,24 @@ test('updating a doc keeps the fts index consistent', () => {
   s.close();
 });
 
+test('emptyBodyCount counts documents with no body text', () => {
+  const s = new Store(':memory:');
+  s.upsert([
+    doc({ id: '1', plaintext: 'has a body' }),
+    doc({ id: '2', plaintext: '' }),
+    doc({ id: '3', plaintext: '' }),
+  ]);
+  assert.equal(s.emptyBodyCount(), 2);
+  assert.equal(s.count(), 3);
+  s.close();
+});
+
+test('emptyBodyCount is zero for an empty index', () => {
+  const s = new Store(':memory:');
+  assert.equal(s.emptyBodyCount(), 0);
+  s.close();
+});
+
 test('meta round-trips', () => {
   const s = new Store(':memory:');
   assert.equal(s.getMeta('last_sync_at'), null);
