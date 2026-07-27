@@ -53,13 +53,17 @@ the source itself.
 ghosthunter init
 ```
 
-It asks for two things:
+In Ghost, go to **Settings, Integrations, Add custom integration**. Name it
+whatever you like. Both values init asks for are on that one screen:
 
-1. **Your site URL.** A bare domain is fine (`birchtree.me`). Pasting the admin
-   URL you were already looking at works too.
-2. **An Admin API key.** In Ghost, go to Settings, then Integrations, then Add
-   custom integration. Name it whatever you like and copy the **Admin API Key**
-   (the `id:secret` one, not the Content API Key).
+1. **API URL.** Copy it exactly as Ghost shows it. On Ghost Pro this is usually
+   `https://yourblog.ghost.io`, which is often **not** the domain your readers
+   visit. If your site has a custom domain, the API URL is still the Ghost one.
+2. **Admin API key.** The longer one, with a colon in the middle. The Content API
+   key will not work, because it cannot see drafts.
+
+Your posts' public links come from Ghost itself, so they use your real domain
+even when the API URL differs. Init prints a sample link so you can confirm.
 
 The key is stored in your macOS Keychain, never in a file. The first sync walks
 your whole archive, which takes about a minute for a few thousand posts. Every

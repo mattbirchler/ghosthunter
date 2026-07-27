@@ -16,6 +16,7 @@ import {
   normalizeSiteUrl,
   dbPath,
   configDir,
+  configPath,
 } from './config.ts';
 
 const VERSION = '0.1.0';
@@ -210,23 +211,45 @@ function ageOf(iso: string): string {
 }
 
 async function runInit(): Promise<number> {
+  // readline stops resolving questions once a piped stdin hits EOF, which would
+  // hang with no output. Fail with an explanation instead.
+  if (process.stdin.isTTY !== true) {
+    process.stderr.write(
+      'ghosthunter init needs an interactive terminal.\n' +
+        'To configure without one, set GHOSTHUNTER_ADMIN_KEY and write the API URL to\n' +
+        `${configPath()} as {"siteUrl": "https://yourblog.ghost.io"}, then run: ghosthunter sync --full\n`,
+    );
+    return EXIT_ERROR;
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
     process.stderr.write('GhostHunter setup\n\n');
+    process.stderr.write(
+      'In Ghost, go to Settings, then Integrations, then your custom integration\n' +
+        '(or Add custom integration). Both values below are on that one screen.\n\n',
+    );
 
     const existing = loadConfig();
     const urlPrompt = existing
-      ? `Site URL [${existing.siteUrl}]: `
-      : 'Site URL (for example birchtree.me): ';
+      ? `API URL [${existing.siteUrl}]: `
+      : 'API URL (for example https://yourblog.ghost.io): ';
     const rawUrl = (await rl.question(urlPrompt)).trim();
     const siteUrl = normalizeSiteUrl(rawUrl === '' && existing ? existing.siteUrl : rawUrl);
 
     process.stderr.write(
-      '\nGet an Admin API key in Ghost: Settings, Integrations, Add custom integration.\n',
+      '\nCopy the Admin API key, not the Content API key. It has a colon in it.\n',
     );
-    const key = (await rl.question('Admin API key (id:secret): ')).trim();
+    const key = (await rl.question('Admin API key: ')).trim();
     if (key === '') {
       process.stderr.write('No key entered. Setup cancelled.\n');
+      return EXIT_ERROR;
+    }
+    if (!key.includes(':')) {
+      process.stderr.write(
+        '\nThat looks like the Content API key. GhostHunter needs the Admin API key,\n' +
+          'which is longer and has a colon in the middle.\n',
+      );
       return EXIT_ERROR;
     }
 
@@ -234,6 +257,13 @@ async function runInit(): Promise<number> {
     const client = new GhostClient(siteUrl, key);
     const probe = await client.fetchPage({ type: 'post', page: 1, limit: 1 });
     process.stderr.write(`Connected. Found ${probe.total} posts.\n`);
+
+    // Public URLs come from Ghost, not from the API URL entered above. On a
+    // split setup those differ, so show a real one to confirm it is right.
+    const sample = probe.docs.find((d) => d.url !== null);
+    if (sample?.url != null) {
+      process.stderr.write(`Links will look like: ${sample.url}\n`);
+    }
 
     saveConfig({ siteUrl });
     setAdminKey(key);
