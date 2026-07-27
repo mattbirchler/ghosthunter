@@ -156,6 +156,7 @@ const CURSOR_HIDE = '\x1b[?25l';
 const CURSOR_SHOW = '\x1b[?25h';
 const HOME = '\x1b[H';
 const CLEAR_BELOW = '\x1b[0J';
+const ERASE_LINE = '\x1b[K';
 
 const FALLBACK_SIZE = { width: 80, height: 24 };
 
@@ -180,15 +181,22 @@ export async function runPicker(opts: RunPickerOptions): Promise<PickerAction> {
   let flashTimer: NodeJS.Timeout | null = null;
   let finished = false;
 
+  // A terminal that reports 0 is as useless as one that reports nothing, and
+  // some pseudo terminals do report 0, so fall back on any falsy value.
   const size = (): { width: number; height: number } => ({
-    width: process.stdout.columns ?? FALLBACK_SIZE.width,
-    height: process.stdout.rows ?? FALLBACK_SIZE.height,
+    width: process.stdout.columns || FALLBACK_SIZE.width,
+    height: process.stdout.rows || FALLBACK_SIZE.height,
   });
 
   const draw = (): void => {
     if (finished) return;
     const frame = layout(state, size(), { site: opts.site, notice, flash });
-    out.write(`${HOME}${frame.join('\n')}${CLEAR_BELOW}`);
+    // Every line is erased to its end before the next is drawn. Without this a
+    // shorter line leaves the tail of the previous frame on screen, which shows
+    // up as stale article text next to a short post. Lines end with \r\n
+    // because raw mode does not translate \n into a carriage return.
+    const body = frame.map((l) => `${l}${ERASE_LINE}`).join('\r\n');
+    out.write(`${HOME}${body}${CLEAR_BELOW}`);
   };
 
   const control: PickerControl = {

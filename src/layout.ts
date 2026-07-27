@@ -171,12 +171,15 @@ export function articleLines(hit: SearchHit, width: number): string[] {
   out.push('');
 
   const body = doc.plaintext.trim();
-  if (body === '') {
-    const snip = hit.snippet.replace(/\s+/g, ' ').trim();
-    out.push(...wrap(snip === '' ? '(no body text)' : snip, width));
-  } else {
+  if (body !== '') {
     out.push(...wrap(body, width));
+    return out;
   }
+
+  // No body text. Show the matched passage if there is one, and otherwise say
+  // plainly that the post is empty rather than leaving the pane looking broken.
+  const snip = hit.snippet.replace(/\s+/g, ' ').trim();
+  out.push(...wrap(snip === '' ? 'This post has no body text.' : snip, width));
   return out;
 }
 

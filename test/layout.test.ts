@@ -207,6 +207,41 @@ test('the article pane links a draft to the editor', () => {
   assert.match(out, /ghost\.io\/ghost\/#\/editor\/post\/a/);
 });
 
+test('a post with no body text says so instead of showing something else', () => {
+  const s: LayoutState = {
+    query: 'x',
+    hits: [hit(doc({ plaintext: '' }), '')],
+    selected: 0,
+  };
+  const out = layout(s, { width: 110, height: 30 }, ctx).map(strip).join('\n');
+  assert.match(out, /This post has no body text/);
+});
+
+test('an empty article pane leaves its rows blank rather than reusing text', () => {
+  const s: LayoutState = {
+    query: 'x',
+    hits: [hit(doc({ plaintext: 'one short line' }), '')],
+    selected: 0,
+  };
+  const out = layout(s, { width: 110, height: 30 }, ctx);
+  // Body rows past the end of the article must carry nothing after the divider.
+  const bodyRows = out.slice(3, out.length - 1).map(strip);
+  const trailing = bodyRows.slice(6);
+  for (const row of trailing) {
+    const right = row.split('│')[1] ?? '';
+    assert.equal(right.trim(), '', `expected an empty article cell, got ${JSON.stringify(right)}`);
+  }
+});
+
+test('no hits leaves the article pane entirely empty', () => {
+  const s: LayoutState = { query: 'zzz', hits: [], selected: 0 };
+  const out = layout(s, { width: 110, height: 30 }, ctx).map(strip);
+  for (const row of out.slice(3, out.length - 1)) {
+    const right = row.split('│')[1] ?? '';
+    assert.equal(right.trim(), '');
+  }
+});
+
 test('a narrow terminal drops to a single column', () => {
   const wide = layout(state(5), { width: 100, height: 24 }, ctx).map(strip).join('\n');
   const narrow = layout(state(5), { width: 40, height: 24 }, ctx).map(strip).join('\n');
