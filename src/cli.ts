@@ -19,7 +19,7 @@ import {
   configPath,
 } from './config.ts';
 
-const VERSION = '0.1.0';
+const VERSION = '1.0.0';
 const DEFAULT_LIMIT = 50;
 
 /** Exit codes. 2 means "not set up yet", which is distinct from a real failure. */

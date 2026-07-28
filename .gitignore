@@ -13,3 +13,4 @@ docs/superpowers/
 config.json
 
 .DS_Store
+build/

@@ -1,6 +1,6 @@
 {
   "name": "@mattbirchler/ghosthunter",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Search your own Ghost blog from the terminal and get the link",
   "type": "module",
   "engines": {
