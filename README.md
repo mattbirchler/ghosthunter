@@ -45,14 +45,13 @@ After the first sync, results are instant and work with no network at all.
 
 ## Install
 
-Requires **Node 26 or newer** and macOS.
-
 ```sh
-npm install -g @mattbirchler/ghosthunter
+brew install mattbirchler/tap/ghosthunter
 ```
 
-There are no dependencies. Nothing compiles, and nothing is downloaded beyond
-the source itself.
+Requires macOS and Node 26 or newer, which Homebrew installs for you. There are
+no other dependencies: the search index uses Node's built-in SQLite, so nothing
+compiles at install time.
 
 ## Setup
 
